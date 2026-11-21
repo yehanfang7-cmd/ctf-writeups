@@ -55,6 +55,16 @@
 
 **[完整 Flare-On 5 題解](FlareOn/Fo5/writeup.md)**
 
+### VM / VMProtect 還原實驗
+
+| 單元 | 核心技術 | 驗證結果 | Writeup |
+|---|---|---|---|
+| openECSC 2024 fsvm | 自製 VM 反組譯、部分求值、邏輯還原 | 548 組模型比對 + 52 組官方 C++ VM 比對 | [題解](VMP/01_fsvm/writeup.md) |
+| VMProtect 3.x sample2 | Triton 符號重播、表達式化簡、LLVM IR | 12,462 條 trace 指令還原為 XOR；SMT 等價性檢查通過 | [題解](VMP/02_vmp_trace/writeup.md) |
+| VMProtect 3.x 多路徑（sample4／5／6） | 自動偵測虛擬分支、雙 trace 合併、覆蓋完整性證明 | 3 個 `if/else` 函式與 C 原始碼 SMT 等價；修正旗標同步 bug | [題解](VMP/03_multipath/writeup.md) |
+
+**[VMP 專區：執行方式、資料來源與限制](VMP/README.md)**。VMP 單元目前驗證作者既有軌跡的函式表達式，尚未重建完整執行檔。
+
 ---
 
 ## 技術棧
@@ -116,6 +126,11 @@ ctf-writeups/
 │   └── Fo5/                         # Flare-On 5 (2018)
 │       ├── writeup.md               # 全題解
 │       └── 01/ ~ 12/                # 每題求解腳本
+├── VMP/                             # VM / VMProtect 還原實驗
+│   ├── fetch_samples.py             # 固定版本下載與 SHA-256 校驗
+│   ├── 01_fsvm/                     # 自製 VM 邏輯還原與官方 VM 比對
+│   ├── 02_vmp_trace/                # 真實 VMP 軌跡重播與 LLVM IR
+│   └── 03_multipath/                # 虛擬分支偵測與雙軌跡合併
 ├── docs/                            # 深度分析文件
 └── .gitignore
 ```

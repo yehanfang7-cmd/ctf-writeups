@@ -1,0 +1,6 @@
+# 根目錄 .gitignore 排除了 *.json，這裡把設定檔加回來
+!.claude/settings.json
+!docker/claude-settings.json
+
+# 執行產物
+logs/

@@ -1,0 +1,9 @@
+# 版本於 2026-11-22 查 PyPI 最新版固定；升級時一次改一個並重建映像測試。
+pwntools==4.15.1
+pycryptodome==4.5.0
+z3-solver==4.13.0.0  # angr 9.2.213 -> claripy 9.2.213 鎖定此版
+sympy==1.14.0
+requests==2.34.2
+ROPgadget==7.7
+angr==9.2.213
+volatility3==2.28.2

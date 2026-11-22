@@ -22,7 +22,7 @@
 | # | 題目 | 核心技術 | Flag |
 |---|------|----------|------|
 | 01 | login.html | JavaScript 逆向 | `ClientSideLoginsAreEasy@flare-on.com` |
-| 02 | IgniteMe | XOR 鏈解密 | `R_y0u_H0t_3n0ugH_t0_1gN1t3@flare-on.com` |
+| 02 | IgniteMe | XOR 鏈解密 | `R_y0u_H0t_3n0ugH_t0_1gn1t3@flare-on.com` |
 | 03 | greek_to_me | 單位元組爆破 | `et_tu_brute_force@flare-on.com` |
 | 04 | notepad | PE 時間戳鏈 + XOR | `bl457_fr0m_th3_p457@flare-on.com` |
 | 05 | pewpewboat | 戰艦遊戲 + ROT13 | `y0u__sUnK_mY__P3Wp3w_b04t@flare-on.com` |

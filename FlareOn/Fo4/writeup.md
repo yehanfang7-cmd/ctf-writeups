@@ -7,7 +7,7 @@
 | # | 題目 | 類型 | 核心技術 | Flag |
 |---|------|------|---------|------|
 | 01 | login.html | Web | ROT13 | `ClientSideLoginsAreEasy@flare-on.com` |
-| 02 | IgniteMe.exe | PE32 | 級聯 XOR + 種子 | `R_y0u_H0t_3n0ugH_t0_1gN1t3@flare-on.com` |
+| 02 | IgniteMe.exe | PE32 | 級聯 XOR + 種子 | `R_y0u_H0t_3n0ugH_t0_1gn1t3@flare-on.com` |
 | 03 | greek_to_me.exe | PE32 | 自解密 payload + 爆破 | `et_tu_brute_force@flare-on.com` |
 | 04 | notepad.exe | PE32 | PE 時間戳鏈 + XOR | `bl457_fr0m_th3_p457@flare-on.com` |
 | 05 | pewpewboat | ELF64 | 戰艦遊戲 + MD5/LCG/ROT13 | `y0u__sUnK_mY__P3Wp3w_b04t@flare-on.com` |
@@ -44,7 +44,7 @@ Flag: `ClientSideLoginsAreEasy@flare-on.com`
 
 求解：猜 `input[0]` → 正推全鏈。枚舉 0x20-0x7e 的 95 個候選，過濾全可打印 + 含 `@flare-on.com` → 唯一解。
 
-Flag: `R_y0u_H0t_3n0ugH_t0_1gN1t3@flare-on.com`
+Flag: `R_y0u_H0t_3n0ugH_t0_1gn1t3@flare-on.com`
 
 ---
 

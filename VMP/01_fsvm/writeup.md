@@ -30,6 +30,8 @@ python VMP/01_fsvm/verify.py --native
 
 前兩個步驟只需 Python 3.10+。`--native` 另需 `g++`；可以 `--compiler` 指定編譯器路徑。去掉 `--native` 仍會執行 Python 比對，但不代表已驗證官方 VM。
 
+2026-11-22 實測：Windows、WinLibs GCC 16.2.0（MinGW-w64 UCRT），`official C++ VM vs interpreter: 52 cases passed`。Windows 開著「智慧型應用程式控制」時，編譯出來的未簽章 `vm.exe` 會被擋下（CodeIntegrity 事件 3077），連結器的 `liblto_plugin.dll` 也會載入失敗；要先關閉這項功能，或改在 Linux／WSL 上執行。
+
 產物：
 
 | 檔案 | 用途 |

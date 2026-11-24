@@ -9,6 +9,9 @@
 | [01 — openECSC 2024 fsvm](01_fsvm/) | 自製 VM CTF，並非 VMProtect | 557 條 VM 指令 → 29 個字元約束 → Python 判定函式；548 組模型比對及 52 組官方 C++ VM 比對通過 | [題解](01_fsvm/writeup.md) |
 | [02 — VMProtect sample2](02_vmp_trace/) | 真正 VMP 3.x 公開研究樣本 | 重播 12,462 條 x64 指令 → `x ^ y` → LLVM IR；還原表達式通過 SMT 與 1,088 組值測試 | [題解](02_vmp_trace/writeup.md) |
 | [03 — VMProtect 多路徑](03_multipath/) | 同上，sample4／5／6（含 `if/else`） | 每樣本兩條 trace → 自動找出虛擬分支 → 合併成 `ite` → 與 C 原始碼 SMT 等價證明（含有號比較）；發現原作 sample4 結果對異號輸入全錯 | [題解](03_multipath/writeup.md) |
+| [04 — VMProtect 直接模擬](04_emulate/) | 同上，sample1–6；不用 Pin | 在 Windows 直接模擬 ELF、學習執行環境、concolic 自動探索路徑；6 個樣本與 C 原始碼 SMT 等價，145,070 條指令與真實 CPU trace 一致 | [題解](04_emulate/writeup.md) |
+| [05 — Flare-On 5 #12 suspicious_floppy](05_floppy/) | CTF 三層 VM（x86 → Subleq → RSSB） | 逐層建模並與下層 lockstep 比對、提升公式、窮舉 G 求解；求出全部解（flag 及後接 1–2 個任意字元），真實 x86 確認 | [題解](05_floppy/writeup.md) |
+| [06 — Tigress challenge 0000](06_tigress/) | Tigress VM 挑戰，5 個程式、5 種 dispatcher | 不依賴 dispatcher 類型的黑箱 opcode 分類 → bytecode 反組譯 → 提升為 C；201,169 步 lockstep 一致、z3 列舉 14 條路徑、每個程式 2,000 組以上輸入與原始 `SECRET` 一致 | [題解](06_tigress/writeup.md) |
 
 驗證日期：01、02 為 2026-10-04，03 為 2026-11-21（02 於同日修正旗標同步順序，輸出不變）。02、03 使用作者既有 trace，尚未自行執行受保護 ELF、錄製新 trace 或重建整個 EXE。
 

@@ -62,8 +62,10 @@
 | openECSC 2024 fsvm | 自製 VM 反組譯、部分求值、邏輯還原 | 548 組模型比對 + 52 組官方 C++ VM 比對 | [題解](VMP/01_fsvm/writeup.md) |
 | VMProtect 3.x sample2 | Triton 符號重播、表達式化簡、LLVM IR | 12,462 條 trace 指令還原為 XOR；SMT 等價性檢查通過 | [題解](VMP/02_vmp_trace/writeup.md) |
 | VMProtect 3.x 多路徑（sample4／5／6） | 自動偵測虛擬分支、雙 trace 合併、覆蓋完整性證明 | 3 個 `if/else` 函式與 C 原始碼 SMT 等價；修正旗標同步 bug | [題解](VMP/03_multipath/writeup.md) |
+| VMProtect 3.x 直接模擬（sample1–6） | 不用 Pin 在 Windows 模擬 ELF、學習環境、concolic 自動探索路徑 | 6 個樣本與 C 原始碼 SMT 等價；145,070 條指令與真實 CPU trace 一致 | [題解](VMP/04_emulate/writeup.md) |
+| Flare-On 5 #12 suspicious_floppy | x86 → Subleq → RSSB 三層逐層建模、lockstep 比對、公式提升、窮舉 G 求解 | 每層與下層逐步一致；求出全部解（flag 及後接 1–2 個任意字元），真實 x86 確認 | [題解](VMP/05_floppy/writeup.md) |
 
-**[VMP 專區：執行方式、資料來源與限制](VMP/README.md)**。VMP 單元目前驗證作者既有軌跡的函式表達式，尚未重建完整執行檔。
+**[VMP 專區：執行方式、資料來源與限制](VMP/README.md)**。單元 01–04 還原的是單一函式的表達式，單元 05 是完整的 CTF 題目；都還沒有重建出可執行的去保護 binary。
 
 ---
 
@@ -130,7 +132,9 @@ ctf-writeups/
 │   ├── fetch_samples.py             # 固定版本下載與 SHA-256 校驗
 │   ├── 01_fsvm/                     # 自製 VM 邏輯還原與官方 VM 比對
 │   ├── 02_vmp_trace/                # 真實 VMP 軌跡重播與 LLVM IR
-│   └── 03_multipath/                # 虛擬分支偵測與雙軌跡合併
+│   ├── 03_multipath/                # 虛擬分支偵測與雙軌跡合併
+│   ├── 04_emulate/                  # 不用 Pin 直接模擬與自動路徑探索
+│   └── 05_floppy/                   # Flare-On 5 #12 三層 VM 去虛擬化
 ├── docs/                            # 深度分析文件
 └── .gitignore
 ```

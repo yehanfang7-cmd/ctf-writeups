@@ -214,7 +214,7 @@ Flag: `recover_these_messages_lost_in_the_colorful_bits@flare-on.com`
 
 **DOS 軟碟映像 + 嵌套 OISC 虛擬機**
 
-1.44MB DOS 軟碟映像（FAT12），`AUTOEXEC.BAT` 執行 `INFOHELP.EXE`。`TMP.DAT`（40KB）包含兩層嵌套虛擬機：
+1.44MB DOS 軟碟映像（FAT12），`AUTOEXEC.BAT` 執行 `INFOHELP.EXE`。`TMP.DAT`（40KB）裡有兩台嵌套的 OISC 虛擬機：
 
 **第一層 — Subleq VM：**
 ```
@@ -230,6 +230,19 @@ mem[operand] = ACC
 if borrow: skip next
 ```
 
-RSSB 虛擬機實現密碼驗證邏輯：計算輸入的 checksum（加總 + 位旋轉），與硬編碼目標值比較。正確密碼解密 `MESSAGE.DAT` 得到 flag。
+外面還有一層 x86：`TMP.DAT` 本身是常駐的 `INT 13h` hook（16 位元 x86），讀取 `MESSAGE.DAT` 的磁區時才呼叫密碼檢查，檢查函式裡跑 Subleq，Subleq 程式再實作 RSSB。flag 就是密碼本身，通過時讀到的內容會被換成 `BE SURE TO DRINK YOUR OVALTINE`。
+
+RSSB 程式的檢查還原後是（`c[]` 為密碼的 32 個 word，NUL 之後為 0）：
+
+```
+p   = 第一個 '@' 的位置（沒有 '@' 直接拒絕）
+G   = K(p) + sum(c[:p])            K(p) = (p<<11) + (p<<10)，但 K(16) = 0x4000
+x_i = (c[2i+1]-32)*128 + (c[2i]-32)
+通過 ⇔ i = 0..14 都滿足 ((x_i ^ 33i) + G) mod 2^16 == table[i]
+```
+
+`K(16)` 的例外來自 RSSB 編譯器的搬移巨集搬不動 `0x8000`。G 只有 65,536 種，窮舉 G 與長度即可直接反推，不需要 SMT。檢查只讀前 30 個字元、也不檢查長度，所以 flag 後面再接 1–2 個任意字元同樣會通過（已在真實 x86 程式碼上確認）。
+
+逐層建模、lockstep 驗證與完整推導見 [VMP/05_floppy](../../VMP/05_floppy/writeup.md)；`12/solve.py` 從映像讀出目標表並求出所有解。
 
 Flag: `Av0cad0_Love_2018@flare-on.com`

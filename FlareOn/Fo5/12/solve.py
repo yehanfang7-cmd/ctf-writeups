@@ -1,242 +1,147 @@
 #!/usr/bin/env python3
 """
-Flare-On 5 Challenge 12 - suspicious_floppy (嵌套虛擬機)
+Flare-On 5 Challenge 12 - suspicious_floppy (三層嵌套 VM)
 
-解題思路：
-    挑戰提供一個 1.44MB 的 DOS 軟碟映像（FAT12 文件系統）。
-    AUTOEXEC.BAT 執行 INFOHELP.EXE，程式提示輸入密碼。
+結構（完整的逐層還原與驗證見 VMP/05_floppy/）：
+    TMP.DAT 是常駐的 INT 13h hook（16 位元 x86），讀取 MESSAGE.DAT 時呼叫密碼檢查。
+    檢查函式在上面跑 Subleq VM，Subleq 程式又實作了一台 RSSB VM，RSSB 程式才是真正的檢查。
+    flag 就是密碼本身。
 
-    軟碟內容：
-    - INFOHELP.EXE  — 密碼驗證主程式
-    - KEY.DAT       — 佔位符 "key goes here"
-    - MESSAGE.DAT   — 佔位符 "This is not the message you are looking for."
-    - TMP.DAT       — 包含嵌套虛擬機代碼（40KB）
-    - COMMAND.COM 等 — 標準 FreeDOS 系統檔案
+還原出來的檢查（c[] 是密碼的 32 個 word，NUL 之後為 0）：
+    p   = 第一個 '@' 的位置（沒有 '@' 直接拒絕）
+    K(p)= (p << 11) + (p << 10)，但 p = 16 時 p << 11 == 0x8000，RSSB 的搬移巨集搬不動 0x8000，
+          所以 K(16) = 0x4000
+    G   = K(p) + sum(c[:p])                       (mod 2^16)
+    x_i = (c[2i+1] - 32) * 128 + (c[2i] - 32)      (mod 2^16)
+    通過 ⇔ i = 0..14 都滿足 ((x_i ^ 33*i) + G) mod 2^16 == table[i]
 
-    虛擬機架構：
-    TMP.DAT 包含兩層嵌套虛擬機：
-
-    第一層 — Subleq 虛擬機：
-        Subleq (SUBtract and branch if Less-than or EQual) 是一種
-        單指令計算機（OISC），每條指令有 3 個運算元 (A, B, C)：
-            mem[B] = mem[B] - mem[A]
-            if mem[B] <= 0: goto C
-            else: goto next instruction
-
-    第二層 — RSSB 虛擬機（在 Subleq 上層執行）：
-        RSSB (Reverse Subtract and Skip if Borrow) 也是 OISC：
-            ACC = mem[operand] - ACC
-            mem[operand] = ACC
-            if borrow: skip next instruction
-
-    密碼驗證：
-    - RSSB 虛擬機實現密碼驗證邏輯
-    - 驗證方式：計算輸入密碼的 checksum（加總 + 位旋轉）
-    - 與硬編碼的目標值比較
-    - 正確密碼解密 MESSAGE.DAT 得到 flag
-
-    求解方法：
-    1. 從 TMP.DAT 提取 Subleq 程式
-    2. 實現 Subleq 解譯器，追蹤 RSSB 虛擬機行為
-    3. 從 RSSB 代碼中提取密碼驗證約束
-    4. 暴力破解或約束求解得到密碼
+求解：G 只有 65,536 種，給定 G 每一對都能直接反推，所以窮舉 G 與長度 1..32 即可，不需要 SMT。
+    只讀前 30 個字元、也不檢查長度，所以 flag 後面再接 1–2 個任意字元同樣會通過。
 """
-import struct
-import sys
+import hashlib
 import os
+import struct
 
-def extract_fat12_file(img_data, filename):
-    """從 FAT12 磁碟映像中提取檔案"""
-    bps = struct.unpack_from('<H', img_data, 11)[0]
-    spc = img_data[13]
-    reserved = struct.unpack_from('<H', img_data, 14)[0]
-    num_fats = img_data[16]
-    root_entries = struct.unpack_from('<H', img_data, 17)[0]
-    spf = struct.unpack_from('<H', img_data, 22)[0]
+TMP_SHA256 = "b9917d86002ba58f10883d11ca35827f93ac293b56f4b469557c6c987e8cd423"
+RESIDENT = 0x43          # TMP.DAT[0x43:] is copied to the resident segment at offset 0
+MEM0 = 0x223             # Subleq word i lives at segment offset MEM0 + 2*i
+RSSB_BASE = 0x7F6        # RSSB word k is Subleq word RSSB_BASE + k
+TABLE = 0xA79            # RSSB index of the 15 target words
+PAIRS, MAXLEN = 15, 32
+PRINTABLE = range(0x20, 0x7F)
 
-    root_start = (reserved + num_fats * spf) * bps
-    data_start = root_start + root_entries * 32
 
-    for i in range(root_entries):
-        entry = img_data[root_start + i * 32:root_start + (i + 1) * 32]
-        if entry[0] == 0x00:
+def fat12_file(image, wanted):
+    bps, spc, reserved, fats, roots = struct.unpack_from("<HBHBH", image, 11)
+    spf = struct.unpack_from("<H", image, 22)[0]
+    fat = image[reserved * bps:(reserved + spf) * bps]
+    root = (reserved + fats * spf) * bps
+    data = root + roots * 32
+    for i in range(roots):
+        e = image[root + 32 * i:root + 32 * i + 32]
+        if e[0] == 0:
             break
-        if entry[0] == 0xE5:
+        name = (e[:8].rstrip() + b"." + e[8:11].rstrip()).decode(errors="replace").strip(".")
+        if e[0] == 0xE5 or e[11] & 0x18 or name.upper() != wanted:
             continue
-        name = entry[:8].rstrip(b' ').decode(errors='replace')
-        ext = entry[8:11].rstrip(b' ').decode(errors='replace')
-        attr = entry[11]
-        cluster = struct.unpack_from('<H', entry, 26)[0]
-        size = struct.unpack_from('<I', entry, 28)[0]
+        cluster, size = struct.unpack_from("<H", e, 26)[0], struct.unpack_from("<I", e, 28)[0]
+        body = bytearray()
+        while 2 <= cluster < 0xFF8:
+            off = data + (cluster - 2) * spc * bps
+            body += image[off:off + spc * bps]
+            v = struct.unpack_from("<H", fat, cluster * 3 // 2)[0]
+            cluster = v >> 4 if cluster & 1 else v & 0xFFF
+        return bytes(body[:size])
+    raise FileNotFoundError(wanted)
 
-        if attr & 0x08:
-            continue
 
-        full_name = ('%s.%s' % (name, ext)).strip('.')
-        if full_name.upper() == filename.upper():
-            offset = data_start + (cluster - 2) * bps
-            return img_data[offset:offset + size]
+def read_table(tmp):
+    seg = tmp[RESIDENT:]
+    off = MEM0 + 2 * (RSSB_BASE + TABLE)
+    return list(struct.unpack_from("<%dH" % PAIRS, seg, off))
 
-    return None
 
-def subleq_vm(memory, max_steps=1000000):
-    """Subleq 虛擬機解譯器"""
-    pc = 0
-    steps = 0
-    output = []
+def at_weight(p):
+    double = (p << 11) & 0xFFFF
+    return ((0 if double == 0x8000 else double) + (p << 10)) & 0xFFFF
 
-    while 0 <= pc < len(memory) and steps < max_steps:
-        if pc + 2 >= len(memory):
-            break
 
-        a = memory[pc]
-        b = memory[pc + 1]
-        c = memory[pc + 2]
+def check(password, targets):
+    c = list(password[:MAXLEN]) + [0] * (MAXLEN - len(password[:MAXLEN]))
+    if 0x40 not in c:
+        return False
+    p = c.index(0x40)
+    g = (at_weight(p) + sum(c[:p])) & 0xFFFF
+    return all(((((c[2 * i + 1] - 32) * 128 + (c[2 * i] - 32)) & 0xFFFF) ^ (33 * i)) + g & 0xFFFF == targets[i]
+               for i in range(PAIRS))
 
-        # 特殊 I/O：A=-1 表示讀取輸入，B=-1 表示輸出
-        if a == -1:
-            # 從輸入讀取到 mem[b]
-            break  # 需要互動
-        elif b == -1:
-            # 輸出 mem[a]
-            if 0 <= a < len(memory):
-                output.append(memory[a])
-            pc += 3
-        else:
-            if 0 <= a < len(memory) and 0 <= b < len(memory):
-                memory[b] -= memory[a]
-                if memory[b] <= 0:
-                    pc = c
-                else:
-                    pc += 3
+
+def solve(targets):
+    """All printable passwords the check accepts; '?' marks a character the check never reads."""
+    found = set()
+    past_end = (-32 * 128 - 32) & 0xFFFF            # x of a pair made of two zero words
+    for g in range(0x10000):
+        typed, half = [], []
+        for i in range(PAIRS):
+            x = ((targets[i] - g) & 0xFFFF) ^ (33 * i)
+            lo, hi = x & 0x7F, x >> 7
+            typed.append((lo + 32, hi + 32) if lo <= 0x5E and hi <= 0x5E else None)
+            first = (x + 32 * 128 + 32) & 0xFFFF
+            half.append("end" if x == past_end else first if first in PRINTABLE else None)
+        for length in range(1, MAXLEN + 1):
+            chars = []
+            for i in range(PAIRS):
+                a, b = 2 * i, 2 * i + 1
+                if b < length:
+                    if typed[i] is None:
+                        break
+                    chars += typed[i]
+                elif a < length:
+                    if half[i] in (None, "end"):
+                        break
+                    chars.append(half[i])
+                elif half[i] != "end":
+                    break
             else:
-                break
+                found.update(complete(bytes(chars), length, g))
+    return sorted(found)
 
-        steps += 1
 
-    return output, steps
+def complete(head, length, g):
+    """Characters after the 30 checked ones are free unless they hold the first '@' or precede it."""
+    tail = length - len(head)
+    if b"@" in head:
+        p = head.index(b"@")
+        return [head + b"?" * tail] if (at_weight(p) + sum(head[:p])) & 0xFFFF == g else []
+    out = []
+    for p in range(len(head), length):
+        base = (at_weight(p) + sum(head)) & 0xFFFF
+        if p == len(head) and base == g:
+            out.append(head + b"@" + b"?" * (length - p - 1))
+        elif p == len(head) + 1:
+            ch = (g - base) & 0xFFFF
+            if ch in PRINTABLE and ch != 0x40:
+                out.append(head + bytes([ch]) + b"@" + b"?" * (length - p - 1))
+    return out
 
-def analyze_image(filepath):
-    """分析軟碟映像"""
-    data = open(filepath, 'rb').read()
-
-    print("[*] 磁碟映像分析")
-    print("    大小: %d bytes (%.1f KB)" % (len(data), len(data) / 1024))
-    print("    OEM: %s" % data[3:11].decode(errors='replace').strip())
-
-    bps = struct.unpack_from('<H', data, 11)[0]
-    root_entries = struct.unpack_from('<H', data, 17)[0]
-    reserved = struct.unpack_from('<H', data, 14)[0]
-    num_fats = data[16]
-    spf = struct.unpack_from('<H', data, 22)[0]
-
-    root_start = (reserved + num_fats * spf) * bps
-    data_start = root_start + root_entries * 32
-
-    print("\n[*] FAT12 檔案列表")
-    for i in range(root_entries):
-        entry = data[root_start + i * 32:root_start + (i + 1) * 32]
-        if entry[0] == 0x00:
-            break
-        if entry[0] == 0xE5 or entry[11] & 0x08:
-            continue
-        name = entry[:8].rstrip(b' ').decode(errors='replace')
-        ext = entry[8:11].rstrip(b' ').decode(errors='replace')
-        cluster = struct.unpack_from('<H', entry, 26)[0]
-        size = struct.unpack_from('<I', entry, 28)[0]
-        full_name = ('%s.%s' % (name, ext)).strip('.')
-        print("    %-20s %8d bytes  (cluster %d)" % (full_name, size, cluster))
-
-    # 提取關鍵檔案
-    print("\n[*] 關鍵檔案內容")
-    autoexec = extract_fat12_file(data, 'AUTOEXEC.BAT')
-    if autoexec:
-        print("    AUTOEXEC.BAT: %s" % autoexec.decode(errors='replace').strip())
-
-    key_dat = extract_fat12_file(data, 'KEY.DAT')
-    if key_dat:
-        print("    KEY.DAT: %s" % repr(key_dat.decode(errors='replace')))
-
-    msg_dat = extract_fat12_file(data, 'MESSAGE.DAT')
-    if msg_dat:
-        print("    MESSAGE.DAT: %s" % repr(msg_dat.decode(errors='replace')))
-
-    tmp_dat = extract_fat12_file(data, 'TMP.DAT')
-    if tmp_dat:
-        print("    TMP.DAT: %d bytes" % len(tmp_dat))
-        # 分析前幾個字節看是否是 x86 代碼
-        if tmp_dat[:2] == b'\x60\x06':
-            print("    TMP.DAT 開頭: PUSHA; PUSH ES (x86 代碼)")
-            print("    → 包含 Subleq 解譯器 + VM 程式數據")
-
-    return data
-
-def explain_nested_vms():
-    """解釋嵌套虛擬機架構"""
-    print("\n[*] 嵌套虛擬機架構")
-    print("    ┌─────────────────────────────────────┐")
-    print("    │         DOS (FreeDOS)                │")
-    print("    │  ┌───────────────────────────────┐   │")
-    print("    │  │     INFOHELP.EXE               │   │")
-    print("    │  │  ┌─────────────────────────┐   │   │")
-    print("    │  │  │   Subleq VM (第一層)     │   │   │")
-    print("    │  │  │  ┌─────────────────┐    │   │   │")
-    print("    │  │  │  │  RSSB VM (第二層) │    │   │   │")
-    print("    │  │  │  │  密碼驗證邏輯     │    │   │   │")
-    print("    │  │  │  └─────────────────┘    │   │   │")
-    print("    │  │  └─────────────────────────┘   │   │")
-    print("    │  └───────────────────────────────┘   │")
-    print("    └─────────────────────────────────────┘")
-
-    print("\n[*] Subleq 指令集 (OISC)")
-    print("    指令格式: A B C")
-    print("    語義: mem[B] -= mem[A]")
-    print("          if mem[B] <= 0: goto C")
-    print("          else: PC += 3")
-    print("    I/O:  A=-1 → 讀取輸入到 mem[B]")
-    print("          B=-1 → 輸出 mem[A]")
-
-    print("\n[*] RSSB 指令集 (OISC)")
-    print("    指令格式: operand")
-    print("    語義: ACC = mem[operand] - ACC")
-    print("          mem[operand] = ACC")
-    print("          if borrow: skip next")
-
-    print("\n[*] 密碼驗證算法")
-    print("    1. RSSB VM 讀取使用者輸入的密碼")
-    print("    2. 對每個字符計算 checksum:")
-    print("       - 累加 ASCII 值")
-    print("       - 位元旋轉（左旋/右旋）")
-    print("    3. 最終 checksum 與硬編碼目標值比較")
-    print("    4. 匹配則輸出解密後的訊息")
 
 def main():
-    print("=" * 60)
-    print("Flare-On 5 Challenge 12 - suspicious_floppy")
-    print("=" * 60)
+    here = os.path.dirname(os.path.abspath(__file__))
+    image = open(os.path.join(here, "suspicious_floppy_v1.0.img"), "rb").read()
+    tmp = fat12_file(image, "TMP.DAT")
+    if hashlib.sha256(tmp).hexdigest() != TMP_SHA256:
+        raise SystemExit("TMP.DAT 不是預期的版本")
+    targets = read_table(tmp)
+    print("table:", " ".join("%04x" % t for t in targets))
 
-    img_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            "suspicious_floppy_v1.0.img")
+    solutions = solve(targets)
+    for s in solutions:
+        print("accepted:", s.decode())
+    flag = solutions[0]
+    assert all(check(s.replace(b"?", b"X"), targets) for s in solutions)
+    assert not check(flag[:5] + b"x" + flag[6:], targets)
+    print("FLAG:", flag.decode())
 
-    try:
-        analyze_image(img_path)
-    except FileNotFoundError:
-        print("[!] 找不到 %s" % img_path)
-
-    explain_nested_vms()
-
-    print("\n[*] 求解策略")
-    print("    方法 1: 追蹤 Subleq VM 執行，提取 RSSB 程式碼")
-    print("           → 分析 RSSB 的密碼驗證邏輯")
-    print("           → 約束求解或暴力破解")
-    print("    方法 2: 在 DOS 模擬器（DOSBox/QEMU）中動態調試")
-    print("           → 在密碼比較處設斷點")
-    print("           → 直接讀取期望的密碼值")
-
-    flag = "Av0cad0_Love_2018@flare-on.com"
-    print("\n" + "=" * 60)
-    print("FLAG: %s" % flag)
-    print("=" * 60)
 
 if __name__ == "__main__":
     main()

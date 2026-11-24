@@ -64,8 +64,9 @@
 | VMProtect 3.x 多路徑（sample4／5／6） | 自動偵測虛擬分支、雙 trace 合併、覆蓋完整性證明 | 3 個 `if/else` 函式與 C 原始碼 SMT 等價；修正旗標同步 bug | [題解](VMP/03_multipath/writeup.md) |
 | VMProtect 3.x 直接模擬（sample1–6） | 不用 Pin 在 Windows 模擬 ELF、學習環境、concolic 自動探索路徑 | 6 個樣本與 C 原始碼 SMT 等價；145,070 條指令與真實 CPU trace 一致 | [題解](VMP/04_emulate/writeup.md) |
 | Flare-On 5 #12 suspicious_floppy | x86 → Subleq → RSSB 三層逐層建模、lockstep 比對、公式提升、窮舉 G 求解 | 每層與下層逐步一致；求出全部解（flag 及後接 1–2 個任意字元），真實 x86 確認 | [題解](VMP/05_floppy/writeup.md) |
+| Tigress challenge 0000（5 個程式） | 不依賴 dispatcher 類型的黑箱 opcode 分類、bytecode 反組譯、提升為 C、z3 路徑列舉 | 5 個程式全部還原成可讀 C；201,169 步 lockstep 一致，每個程式 2,000 組以上輸入與原始 `SECRET` 一致 | [題解](VMP/06_tigress/writeup.md) |
 
-**[VMP 專區：執行方式、資料來源與限制](VMP/README.md)**。單元 01–04 還原的是單一函式的表達式，單元 05 是完整的 CTF 題目；都還沒有重建出可執行的去保護 binary。
+**[VMP 專區：執行方式、資料來源與限制](VMP/README.md)**。單元 01–04 還原的是單一函式的表達式，單元 05 是完整的 CTF 題目，單元 06 把 5 個 VM 保護的函式還原成 C 原始碼；都還沒有重建出可執行的去保護 binary。
 
 ---
 
@@ -134,7 +135,8 @@ ctf-writeups/
 │   ├── 02_vmp_trace/                # 真實 VMP 軌跡重播與 LLVM IR
 │   ├── 03_multipath/                # 虛擬分支偵測與雙軌跡合併
 │   ├── 04_emulate/                  # 不用 Pin 直接模擬與自動路徑探索
-│   └── 05_floppy/                   # Flare-On 5 #12 三層 VM 去虛擬化
+│   ├── 05_floppy/                   # Flare-On 5 #12 三層 VM 去虛擬化
+│   └── 06_tigress/                  # Tigress VM 挑戰 0000 還原成 C
 ├── docs/                            # 深度分析文件
 └── .gitignore
 ```

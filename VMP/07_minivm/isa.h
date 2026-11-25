@@ -57,7 +57,9 @@ static inline int vm_fetch64(const uint8_t *code, size_t len, size_t *pc, uint64
     return VM_OK;
 }
 
-static int vm_run(const uint8_t *code, size_t len, uint64_t input, uint64_t *out) {
+/* opmap maps each raw code byte to a canonical OP_* id (0 = invalid); NULL means the bytes are already
+ * canonical. The shipped build carries a per-build-shuffled opmap so no two builds number the opcodes alike. */
+static inline int vm_run(const uint8_t *code, size_t len, uint64_t input, uint64_t *out, const uint8_t *opmap) {
     uint64_t stack[VM_STACK], a, b, n;
     int sp = 0, err;
     size_t pc = 0;
@@ -69,7 +71,8 @@ static int vm_run(const uint8_t *code, size_t len, uint64_t input, uint64_t *out
 #define SHIFT(expr) do { IMM(n); if (n >= 64) return VM_BAD_SHIFT; NEED(1); a = stack[--sp]; stack[sp++] = (expr); } while (0)
 
     while (pc < len) {
-        uint8_t op = code[pc++];
+        uint8_t raw = code[pc++];
+        uint8_t op = opmap ? opmap[raw] : raw;
         switch (op) {                                  /* ← dispatcher */
         case OP_INPUT: ROOM(); stack[sp++] = input; break;
         case OP_PUSH:  IMM(a); ROOM(); stack[sp++] = a; break;

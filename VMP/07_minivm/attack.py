@@ -37,11 +37,13 @@ def keystream(seed, n=MAX_LEN):
 KS = [keystream(s) for s in range(256)]
 
 
-def parse(data, off, seed):
-    """the program at data[off:] under key `seed`, or None if it is not well-formed"""
+def parse(data, off, seed, ops=OPS):
+    """the program at data[off:] under key `seed`, or None if it is not well-formed.
+    `ops` maps a decrypted byte to an opcode name; the default is the canonical numbering, but the
+    black-box attack passes a numbering it recovered by probing, so this works on shuffled builds too."""
     ks, insns, pc, depth = KS[seed], [], 0, 0
     while off + pc < len(data) and pc < MAX_LEN:
-        name = OPS.get(data[off + pc] ^ ks[pc])
+        name = ops.get(data[off + pc] ^ ks[pc])
         if name is None:
             return None
         imm = None
@@ -63,13 +65,13 @@ def parse(data, off, seed):
     return None
 
 
-def scan(data):
-    """every (offset, key, program) in the file that decrypts to a well-formed program"""
+def scan(data, ops=OPS):
+    """every (offset, key, program) in the file that decrypts to a well-formed program under numbering `ops`"""
     hits = []
     for off in range(len(data)):
-        for op in OPS:
+        for op in ops:
             seed = data[off] ^ op                       # the key that makes this byte the opcode `op`
-            p = parse(data, off, seed)
+            p = parse(data, off, seed, ops)
             if p:
                 hits.append((off, seed, p))
     return hits

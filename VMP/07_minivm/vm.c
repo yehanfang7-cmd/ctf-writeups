@@ -49,7 +49,7 @@ int main(int argc, char **argv) {
     if (getenv("VM_DISASM")) dump(code, BLOB_LEN);
 #endif
 
-    int err = vm_run(code, BLOB_LEN, input, &out);
+    int err = vm_run(code, BLOB_LEN, input, &out, OPMAP);
     if (err != VM_OK) { fprintf(stderr, "vm error %d\n", err); return 2; }
     printf("%llu\n", (unsigned long long)out);
 

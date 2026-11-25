@@ -57,16 +57,23 @@ def cc(src, out, *flags, include=()):
     return out
 
 
-def build(out=GEN, seed=0xA5):
-    """gen -> blob.h -> shipped vm and SELFTEST vm. Returns the paths and gen's listing."""
+def gen_opcodes(listing):
+    """the opcode numbering gen.c used, parsed from its listing: {name: byte}"""
+    return {p[1]: int(p[2], 16) for p in (l.split() for l in listing.splitlines()) if p and p[0] == "OPCODE"}
+
+
+def build(out=GEN, seed=0xA5, opcode_seed=0):
+    """gen -> blob.h -> shipped vm, SELFTEST vm, and the attacker's oracle. Returns the paths and gen's listing.
+    opcode_seed != 0 shuffles the opcode numbering for this build (Tigress-style diversity)."""
     out.mkdir(parents=True, exist_ok=True)
     gen = cc(HERE / "gen.c", out / f"gen{EXE}")
-    r = subprocess.run([str(gen), str(out / "blob.h"), hex(seed)], capture_output=True, text=True)
+    r = subprocess.run([str(gen), str(out / "blob.h"), hex(seed), hex(opcode_seed)], capture_output=True, text=True)
     if r.returncode:
         raise RuntimeError(f"gen failed:\n{r.stdout}{r.stderr}")
-    return dict(listing=r.stdout,
+    return dict(listing=r.stdout, opcodes=gen_opcodes(r.stdout),
                 ship=cc(HERE / "vm.c", out / f"vm{EXE}", "-s", include=[out]),
-                selftest=cc(HERE / "vm.c", out / f"vm_selftest{EXE}", "-DSELFTEST", include=[out]))
+                selftest=cc(HERE / "vm.c", out / f"vm_selftest{EXE}", "-DSELFTEST", include=[out]),
+                oracle=cc(HERE / "oracle.c", out / f"oracle{EXE}", include=[out]))
 
 
 def leaks(path):
@@ -117,9 +124,20 @@ def main():
     report.append(f"selftest  {len(xs) - len(ok_st)}/{len(xs)} inputs match the reference (and its own native check)")
     rejected = [a for a in ("abc", "", "-1", "12x", "0x", "99999999999999999999") if run(b["ship"], a)[0] != 1]
     report.append(f"bad arguments rejected: {6 - len(rejected)}/6" + (f"  NOT: {rejected}" if rejected else ""))
+
+    import attack_div                                             # diversity: shuffle opcodes, break with unit 06
+    d = build(GEN / "div", seed=0xA5, opcode_seed=0x5EED)
+    dv = attack_div.break_build(d["ship"], d["oracle"])
+    recovered_ok = all(dv["ops"].get(byte) == name for name, byte in d["opcodes"].items())
+    report.append(f"diversity  shuffled build leaks: {', '.join(leaks(d['ship'])) or 'none'}")
+    report.append(f"diversity  unit-07 fixed scanner: {dv['scanner_fixed']} confirmed (expected 0)")
+    report.append(f"diversity  behavioural classify recovered all 13 opcodes: {recovered_ok}")
+    report.append(f"diversity  lifted C confirmed against the shuffled binary: {len(dv['confirmed']) == 1}")
+
     print("\n".join(report))
     (GEN / "report.txt").write_text("\n".join(report) + "\n", encoding="utf-8")
-    if leaks(b["ship"]) or ok_ship or ok_st or rejected:
+    if (leaks(b["ship"]) or ok_ship or ok_st or rejected or leaks(d["ship"]) or dv["scanner_fixed"]
+            or not recovered_ok or len(dv["confirmed"]) != 1):
         sys.exit("FAILED")
 
 

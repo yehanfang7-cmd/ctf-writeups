@@ -1,6 +1,6 @@
 # 07 — minivm：自己做一個 VM 保護器，再從 binary 把它拆掉
 
-前面六個單元都是**拆別人的 VM**。這個單元反過來：從一份教學用的小型 VM 保護器（[`original/`](original/)，含它的 [README](original/README.md)）出發，先檢查它實際保護了什麼，修好之後，再站在攻擊者的位置，只拿出貨的 binary 把秘密演算法還原成 C。
+前面六個單元都是**拆別人的 VM**。這個單元反過來：從一份教學用的小型 VM 保護器（[`original/`](original/)，含它的 [README](original/README.md)）出發，先檢查它實際保護了什麼，修好之後，再站在攻擊者的位置，只拿出貨的 binary 把秘密演算法還原成 C。最後替保護器加上「每次建置隨機重排 opcode 編號」（原始 README 的擴充方向第 1 項），讓固定編號的掃描失效，再改用單元 06 不看編號、靠行為分類的方法破掉它。
 
 ## 結果
 
@@ -12,6 +12,7 @@
 | 竄改或截斷的 bytecode | 界外讀寫（未定義行為） | 回傳錯誤碼 |
 | 200 組輸入與獨立寫的 Python 版本一致 | — | 是（出貨版和 `SELFTEST` 版都是） |
 | 只拿 binary 還原出秘密 | 不用拆 VM，反組譯 `secret_reference` 就是答案 | `attack.py` 4.6 秒還原成 C，編譯後與 binary 一致 |
+| opcode 每次建置隨機重排 | 無 | 固定編號掃描失效（0 個候選）；`attack_div.py` 用行為分類還原編號，再還原出同一份 C |
 
 秘密演算法（MurmurHash 風格的 finalizer）：
 
@@ -42,19 +43,22 @@ uint64_t secret(uint64_t x) {
 需要 Python 3.10+ 和 gcc（Windows 用 WinLibs；`CC` 環境變數可指定編譯器）。全部只用標準函式庫，產物都寫進 Git 忽略的 `generated/`。
 
 ```powershell
-python VMP/07_minivm/build.py        # 組譯、加密、編譯出貨版和 SELFTEST 版，檢查洩漏與正確性
-python VMP/07_minivm/attack.py       # 只拿 generated/vm.exe，把秘密還原成 C
-cd VMP/07_minivm; python -m unittest test_minivm -v   # 9 個測試，約 12 秒
+python VMP/07_minivm/build.py        # 組譯、加密、編譯、檢查洩漏與正確性，含 opcode 重排的破解示範
+python VMP/07_minivm/attack.py       # 固定編號：只拿 generated/vm.exe，掃描還原成 C
+python VMP/07_minivm/attack_div.py   # 隨機編號：用單元 06 的黑箱分類法破解
+cd VMP/07_minivm; python -m unittest test_minivm -v   # 15 個測試，約 45 秒
 ```
 
 | 檔案 | 角色 |
 |---|---|
-| `isa.h` | 指令集、滾動金鑰 XOR、直譯器；不含任何秘密常數 |
+| `isa.h` | 指令集、滾動金鑰 XOR、直譯器；直譯器由 `opmap` 查表驅動，不含任何秘密常數 |
 | `reference.h` | 秘密演算法的原生版本，只給 `gen.c` 和 `SELFTEST` 版用 |
-| `gen.c` | 建置期：組譯 → 與 reference 比對 2,006 組輸入 → 加密 → 輸出 `generated/blob.h` |
-| `vm.c` | 出貨程式：加密 blob + 直譯器；`-DSELFTEST` 才多出原生對照和 `VM_DISASM` |
-| `build.py` | 建置並檢查：binary 裡有沒有秘密常數、輸出對不對、壞參數會不會被拒絕 |
-| `attack.py` | 攻擊方：掃描 → 解密 → 提升為 C → 用 binary 本身確認 |
+| `gen.c` | 建置期：組譯 → 與 reference 比對 2,006 組輸入 → 加密 → 輸出 `generated/blob.h`；可依種子重排 opcode |
+| `vm.c` | 出貨程式：加密 blob + opcode 對照表 + 直譯器；`-DSELFTEST` 才多出原生對照和 `VM_DISASM` |
+| `oracle.c` | 攻擊方的單步執行器：代表從 binary 取出的直譯器，會印出整個堆疊供行為分析 |
+| `build.py` | 建置並檢查：binary 裡有沒有秘密常數、輸出對不對、壞參數會不會被拒絕，以及重排後的破解 |
+| `attack.py` | 攻擊方（固定編號）：掃描 → 解密 → 提升為 C → 用 binary 本身確認 |
+| `attack_div.py` | 攻擊方（隨機編號）：用 oracle 行為分類 → 還原編號 → 再走 `attack.py` 的掃描 |
 | `original/` | 收到的原始版本，當作對照組，不修改 |
 
 ## 一、原始版保護了什麼
@@ -113,7 +117,7 @@ movabs $0xff51afd7ed558ccd,%rax
 
 ## 四、驗證
 
-`test_minivm.py` 的 9 個測試。每個「通過」都配了一個會失敗的對照組，避免測試其實什麼都沒檢查：
+`test_minivm.py` 的 15 個測試。每個「通過」儘量配一個會失敗的對照組，避免測試其實什麼都沒檢查：
 
 | 測試 | 檢查 | 對照組 |
 |---|---|---|
@@ -126,11 +130,38 @@ movabs $0xff51afd7ed558ccd,%rax
 | 攻擊還原出秘密 | 1 個候選、金鑰 `0xa5`；還原的 C 編譯後與 binary 一致 | — |
 | 攻擊不依賴金鑰 | 用金鑰 `0x3c` 重新建置，攻擊照樣找到並確認 | — |
 | 攻擊信 binary，不信掃描 | 在檔尾附加一個常數差 1 的假 blob（另一把金鑰）；掃描找到 2 個，只有真的那個和 binary 一致 | 假 blob 格式完全正確，只靠掃描無法分辨 |
+| 重排真的改了位元組 | 重排後 13 個 opcode 的位元組與 canonical 不同，但仍是排列 | — |
+| 重排版沒有明文秘密且算得對 | 偵測器找不到東西；40 組輸入與 Python 版本一致 | — |
+| 固定編號掃描在重排版失效 | `attack.py` 的掃描 confirmed 數為 0 | — |
+| 行為分類還原編號 | 分類出的 13 個位元組與 `gen` 實際用的完全一致 | — |
+| 還原的 C 與重排版 binary 一致 | 提升出的 C 編譯後與重排 binary 一致 | — |
+| 不同種子都能破 | 兩個 opcode 種子給出不同編號，兩者都被還原並確認 | — |
 
-## 五、限制與下一步
+## 五、opcode 隨機重排（diversity），以及單元 06 的破法
 
-- **攻擊假設知道指令集**。只要每次建置都隨機打亂 opcode 編號（原始 README 擴充方向第 1 項），`attack.py` 的掃描就失效了。那時要改用單元 06 的做法：不看編號，實際跑一條指令，從效果判斷語意。
+固定編號的 `attack.py` 有個前提：它知道 opcode 是 `0x10..0x1c`。原始 README 的擴充方向第 1 項就是打亂這個編號。這一節把重排做出來，再用單元 06 不看編號、靠行為的方法破掉。
+
+**protector 這邊**：`gen.c` 多吃一個 `opcode_seed`。非 0 時用 Fisher-Yates 把 13 個 opcode 隨機指派到 `1..255` 裡相異的位元組，組譯時用這些位元組，並把「位元組 → canonical id」的對照表 `OPMAP` 一起寫進 `blob.h`。直譯器改成由 `OPMAP` 查表驅動（`isa.h` 的 `vm_run` 多一個 `opmap` 參數）。每個種子都是一套新的編號：
+
+```
+SHL = 0x12   XOR = 0x14   AND = 0x26   ROL = 0x47   DUP = 0x43   HALT = 0x4e
+INPUT = 0x97   SUB = 0xa2   MUL = 0xab   PUSH = 0xb2   SHR = 0xb4   OR = 0x8e   ADD = 0xd2
+```
+
+`attack.py` 的掃描寫死了 opcode 是 `0x10..0x1c`，現在 blob 裡這些位元組換成了上面這套，掃描 confirmed 數直接變 0。
+
+**attacker 這邊**（`attack_div.py`，用的就是單元 06 不看 dispatcher 編號、靠行為分類的方法）：
+
+1. **把直譯器當成 oracle**。單元 06 是用 Unicorn 模擬 ELF 裡的 `vm_run`，單步跑一條指令、讀整個 VM 狀態。這裡為了可重現，用同一份 `blob.h` 編一支 `oracle.exe`：它和出貨 binary 是同一個直譯器、同一套編號，差別只在會把整個堆疊印出來。`attack_div.py` 從不讀 `OPMAP`，只送 bytecode、看堆疊，純靠行為反推語意。
+2. **分類 13 個 opcode**。送一位元組程式看錯誤碼：`BAD_OP` 的位元組不是 opcode，`TRUNCATED` 的是帶運算元的四個（`PUSH`/`SHR`/`SHL`/`ROL`）。再用幾個探針逐一定位：留下運算元在堆疊上的是 `PUSH`；單獨一條就把輸入留在堆疊上的是 `INPUT`；在 `INPUT` 後面能收尾並回傳結果的是 `HALT`，把堆疊變兩份的是 `DUP`；用 `PUSH 6, PUSH 3, op, HALT` 的結果（9/3/18/5/2/7）分出六個二元運算；用 `PUSH val, op n, HALT` 的結果分出三個位移。
+3. **接回 `attack.py`**。有了「位元組 → 語意」的對照，就把它當成新的編號餵進 `attack.py` 的掃描，照樣找到 blob、解密、提升成 C，再用重排後的 binary 本身確認。還原出的 `secret` 和固定編號版一模一樣。
+
+整個流程約 5–6 秒，大半花在反覆啟動 `oracle.exe`。這一步的 `oracle.exe` 是「從 binary 取出的那個函式」的替身；真正對 PE 做這件事就是單元 06 對 ELF 做的：用 Unicorn 模擬那段機器碼。另外要誠實說明一點：這個教學版的 `OPMAP` 是明文表，直接讀 binary 也能拿到編號；之所以仍示範行為分類，是因為它才是能對付「編號被編進控制流、或 superoperator」那類 VM 的方法，也正是這個練習要練的單元 06 技巧。
+
+## 六、限制與下一步
+
 - **加密本身沒有變強**。拿掉明文洩漏之後，剩下的保護就是「blob 被 XOR 過」。金鑰仍在 binary 裡，第三節就是證明。
 - **常數本身就是指紋**。`0xff51afd7ed558ccd` 是 MurmurHash3 的招牌常數，只要 bytecode 被還原，就認得出來。原始 README 的擴充方向第 3 項（常數拆解）處理的就是這件事。
 - **只在 Windows + WinLibs gcc 上驗證過**。程式碼是可攜的 C，但其他編譯器和最佳化等級下，「binary 裡沒有常數」需要重新跑 `build.py` 確認，例如編譯器可能把整個解密和直譯過程在編譯期算完。
 - **等價是測試出來的，不是證明**。出貨版與 Python 版本、還原的 C 與 binary，都是在固定的一批輸入上比對。
+- **重排只擋住固定編號的掃描**。`OPMAP` 是明文表，讀 binary 也能拿到編號；行為分類不受影響。真正要逼攻擊者走行為分析，下一步是把編號編進控制流、或做 superoperator（擴充方向第 2 項）把多條指令併成一條，讓單一 handler 的語意變複雜。

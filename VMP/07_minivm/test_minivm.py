@@ -13,7 +13,7 @@ CORE_CASES = r"""
 #include <stdio.h>
 #include "isa.h"
 static void t(const char *name, const uint8_t *c, size_t n, uint64_t x) {
-    uint64_t out = 0; int err = vm_run(c, n, x, &out);
+    uint64_t out = 0; int err = vm_run(c, n, x, &out, NULL);
     printf("%s %d %llu\n", name, err, (unsigned long long)out);
 }
 int main(void) {
@@ -120,6 +120,43 @@ class MiniVM(unittest.TestCase):
         a = attack.attack(exe, n_inputs=20)
         self.assertEqual(a["candidates"], 2)
         self.assertEqual([(o, s) for o, s, _ in a["confirmed"]], [(off, 0xA5)])
+
+
+@unittest.skipUnless(HAVE_CC, "no C compiler")
+class Diversity(unittest.TestCase):
+    """opcode numbering shuffled per build; broken by unit 06's behavioural classification"""
+    @classmethod
+    def setUpClass(cls):
+        import attack_div
+        cls.attack_div = attack_div
+        cls.b = build.build(build.GEN / "div_test", seed=0x3C, opcode_seed=0x1234)
+        cls.res = attack_div.break_build(cls.b["ship"], cls.b["oracle"], n_inputs=40)
+
+    def test_shuffling_changes_the_opcode_bytes(self):
+        canon = {"INPUT": 0x10, "PUSH": 0x11, "ADD": 0x12, "HALT": 0x1C}
+        self.assertTrue(any(self.b["opcodes"][k] != v for k, v in canon.items()))
+        self.assertEqual(len(set(self.b["opcodes"].values())), 13)        # still a permutation
+
+    def test_shuffled_build_keeps_no_plaintext_secret_and_computes_it(self):
+        self.assertEqual(build.leaks(self.b["ship"]), [])
+        self.assertEqual(build.compare(self.b["ship"], build.test_inputs(40)), [])
+
+    def test_fixed_opcode_scanner_fails_on_a_shuffled_build(self):
+        self.assertEqual(self.res["scanner_fixed"], 0)                    # attack.py's numbering is gone
+
+    def test_behavioural_classification_recovers_the_numbering(self):
+        for name, byte in self.b["opcodes"].items():
+            self.assertEqual(self.res["ops"].get(byte), name)            # recovered without reading the table
+
+    def test_recovered_c_matches_the_shuffled_binary(self):
+        self.assertEqual(len(self.res["confirmed"]), 1)
+        self.assertIn("rotl64((t0 ^ (t0 >> 15)) + 0x9e3779b97f4a7c15ULL, 13)", self.res["source"])
+
+    def test_two_seeds_give_different_numberings_both_broken(self):
+        other = build.build(build.GEN / "div_test2", seed=0x3C, opcode_seed=0x9999)
+        self.assertNotEqual(self.b["opcodes"], other["opcodes"])
+        r = self.attack_div.break_build(other["ship"], other["oracle"], n_inputs=30)
+        self.assertEqual((r["scanner_fixed"], len(r["confirmed"])), (0, 1))
 
 
 if __name__ == "__main__":

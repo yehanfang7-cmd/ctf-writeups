@@ -12,7 +12,7 @@
 | [04 — VMProtect 直接模擬](04_emulate/) | 同上，sample1–6；不用 Pin | 在 Windows 直接模擬 ELF、學習執行環境、concolic 自動探索路徑；6 個樣本與 C 原始碼 SMT 等價，145,070 條指令與真實 CPU trace 一致 | [題解](04_emulate/writeup.md) |
 | [05 — Flare-On 5 #12 suspicious_floppy](05_floppy/) | CTF 三層 VM（x86 → Subleq → RSSB） | 逐層建模並與下層 lockstep 比對、提升公式、窮舉 G 求解；求出全部解（flag 及後接 1–2 個任意字元），真實 x86 確認 | [題解](05_floppy/writeup.md) |
 | [06 — Tigress challenge 0000](06_tigress/) | Tigress VM 挑戰，5 個程式、5 種 dispatcher | 不依賴 dispatcher 類型的黑箱 opcode 分類 → bytecode 反組譯 → 提升為 C；201,169 步 lockstep 一致、z3 列舉 14 條路徑、每個程式 2,000 組以上輸入與原始 `SECRET` 一致 | [題解](06_tigress/writeup.md) |
-| [07 — minivm 自製保護器](07_minivm/) | 自己寫的教學用 VM 保護器，先修再拆 | 找出原始版三處明文洩漏 → 建置期與出貨分離、直譯器加固 → 只拿出貨 binary 掃描金鑰並提升為 C，編譯後與 binary 一致 | [題解](07_minivm/writeup.md) |
+| [07 — minivm 自製保護器](07_minivm/) | 自己寫的教學用 VM 保護器，先修再拆，再加 opcode 隨機重排 | 找出原始版三處明文洩漏 → 建置期與出貨分離、直譯器加固 → 只拿 binary 掃描還原成 C；再每次建置隨機重排 opcode，固定掃描失效，改用單元 06 的黑箱分類法還原編號與同一份 C | [題解](07_minivm/writeup.md) |
 
 驗證日期：01、02 為 2026-10-04，03 為 2026-11-21（02 於同日修正旗標同步順序，輸出不變）。02、03 使用作者既有 trace，尚未自行執行受保護 ELF、錄製新 trace 或重建整個 EXE。
 

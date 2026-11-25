@@ -1,6 +1,6 @@
 # CTF 逆向工程題解教程
 
-> 逆向工程 CTF 題解合集 — 包含 KCTF2026 看雪靶場全 8 題 + Flare-On 4/5 全 24 題，附完整解題腳本與詳細分析
+> 逆向工程 CTF 題解合集 — 包含 KCTF2026 看雪靶場全 8 題 + Flare-On 4/5 全 24 題 + VM/VMProtect 還原實驗 + Go 執行檔多層防逆向實作，附完整解題腳本與詳細分析
 
 ## 目錄
 
@@ -68,6 +68,22 @@
 | minivm（自製 VM 保護器） | 找出原始版的明文洩漏、建置期與出貨分離、直譯器加固；只拿 binary 掃描金鑰並提升為 C；再加上 opcode 隨機重排並用單元 06 的黑箱分類法破解 | 出貨版找不到任何秘密常數；攻擊 4.6 秒還原出 C；重排後固定掃描失效，行為分類還原全部 13 個 opcode 並還原出同一份 C；15 個測試 | [題解](VMP/07_minivm/writeup.md) |
 
 **[VMP 專區：執行方式、資料來源與限制](VMP/README.md)**。單元 01–04 還原的是單一函式的表達式，單元 05 是完整的 CTF 題目，單元 06 把 5 個 VM 保護的函式還原成 C 原始碼，單元 07 自己做保護器再拆掉它；都還沒有重建出可執行的去保護 binary。
+
+### Go 執行檔防逆向 / 防 AI 反編譯（防守方實作）
+
+> 前面各單元都是「拆」；這個單元反過來「守」——把一個帶授權驗證 + 核心演算法的 Go 應用（`sentinel`），用多層疊加硬化到對自動化逆向成本極高，並實際建置 + 回歸驗證。
+
+| 層 | 內容 | 狀態 |
+|---|---|---|
+| 1+2 | 編譯瘦身 `-s -w -trimpath` + garble `-literals -tiny`（符號/路徑/使用者名刷除） | ✅ |
+| 3 | 自訂 AES-GCM 字串加密 + build 前 code-gen（明文不進二進位，防 GoStringUngarbler） | ✅ |
+| 4 | cgo 反調試（`NtQueryInformationProcess` 等）+ `.text` 完整性自檢 + 擴散/延遲/靜默假邏輯 | ✅ |
+| 5 | 核心邏輯後端化協定：nonce 防重放、憑證 pinning、裝置指紋、離線寬限快取 | ✅ 骨架 |
+| 6 | VMProtect 虛擬化前置：最敏感決策下放為帶標記的原生 cgo 函式（stub + SDK 兩版） | ⚠️ 前置 |
+| §9 | 程式碼簽章 + VirusTotal 誤報掃描 | ⚠️ 腳本就緒 |
+
+實測：garble 版掃不到任何符號/敏感明文；授權（0.2790）≠ 未授權（0.25）；篡改 `.text` → 靜默降級。
+端對端驗收 `scripts/verify.ps1` 全綠。**[Go 硬化專案 README](go/README.md)** · **[分層狀態報告](go/docs/hardening-report.md)**。
 
 ---
 
@@ -139,6 +155,11 @@ ctf-writeups/
 │   ├── 05_floppy/                   # Flare-On 5 #12 三層 VM 去虛擬化
 │   ├── 06_tigress/                  # Tigress VM 挑戰 0000 還原成 C
 │   └── 07_minivm/                   # 自製 VM 保護器：修正洩漏後從 binary 還原
+├── go/                              # Go 執行檔多層防逆向實作（防守方）
+│   ├── cmd/ internal/ tools/        # sentinel app + securegen/mocklicense
+│   ├── scripts/                     # build / 完整性回填 / 驗收回歸 / VT 掃描
+│   ├── docs/                        # hardening-report / vmprotect-manual / backend
+│   └── README.md
 ├── docs/                            # 深度分析文件
 └── .gitignore
 ```

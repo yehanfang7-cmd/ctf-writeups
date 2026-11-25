@@ -1,0 +1,16 @@
+# build outputs
+/bin/
+
+# layer-5 offline grant cache (written to %APPDATA%\sentinel at runtime; never commit)
+grant.json
+
+# In a REAL project, the plaintext secret manifest must NOT be committed:
+#   build/secrets.src.json
+# It is kept in this DEMO so the repo builds out-of-the-box. Treat it as the
+# source of truth that stays OUT of the shipped binary (layer 3), not as data to
+# publish.
+
+# Go
+*.exe
+*.test
+*.out

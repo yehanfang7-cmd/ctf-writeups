@@ -1,0 +1,24 @@
+# sensitive-strings.txt — 敏感字串盤點(規格書 §1.1)
+#
+# 來源:tools/mocklicense、internal/* 掃描 + build/secrets.src.json。
+# 「處置」欄位說明每個字串在最終 exe 裡的狀態。
+# 關鍵結論:所有真正敏感的字串都走第 3 層自訂 AES-GCM 加密(build/secrets.src.json),
+# 明文絕不進入任何 .go 原始碼,因此 strings / GoStringUngarbler 都掃不到。
+
+類別            名稱                         明文(僅存在於 build/secrets.src.json)                         處置
+----            ----                         ----                                                           ----
+API endpoint    API_ENDPOINT                 https://api.sentinel-licensing.example.com/v1                  第3層加密 + 第5層後端化
+API path        LICENSE_VERIFY_PATH          /license/verify                                                第3層加密
+憑證綁定         LICENSE_PUBKEY_PIN           sha256//YLh1dUR9y6Kja30RrAn7JKqbQTKbxN7oV7gWZ2WqNk=            第3層加密(SPKI pin)
+授權特徵         FEATURE_PRO                  feature.pro.enabled                                            第3層加密
+授權特徵         FEATURE_ALGO_FULL            feature.algo.full_precision                                    第3層加密(核心演算法閘門)
+授權鹽           LICENSE_SALT                 s3nt1nel::grant::v1::8f21c                                      第3層加密(demo 簽章金鑰;正式版改後端非對稱簽章)
+反篡改誘餌       TAMPER_DECOY_MSG             updating telemetry cache                                       第3層加密(靜默假邏輯用)
+裝置指紋金鑰     DEVICE_HMAC_SECRET           d3v1ce-fp::rotate-me::a91ff20c                                 第3層加密
+
+# 驗證指令(應全部掃不到;參見 §10 驗收):
+#   PS> $t=[Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes("bin\sentinel_garbled.exe"))
+#   PS> "feature.algo.full_precision","api.sentinel-licensing","s3nt1nel::grant" | % { "$_ -> $($t.Contains($_))" }
+#
+# 注意:LICENSE_SALT / DEVICE_HMAC_SECRET 屬「本地金鑰」=「已洩露金鑰」。
+# 它們留在本地只是 demo 方便;正式部署的長期金鑰必須由伺服器下發(第5層)。

@@ -1,0 +1,24 @@
+# critical-funcs.txt — 授權 / 驗證 / 核心邏輯函式盤點(規格書 §1.1)
+#
+# 這些是後面要重點保護(第4層擴散、第6層虛擬化、第5層後端化)的對象。
+# 欄位:函式 | 檔案 | 角色 | 保護策略
+
+函式                              檔案                               角色                              保護策略
+----                              ----                               ----                              ----
+license.Verify                    internal/license/license.go        離線授權總驗證(擴散三片段)       第4層擴散 + garble
+license.(*State).allowed          internal/license/license.go        折算最終授權決策                   經 vmp.CriticalCombine(第6層)
+license.(*State).FullPrecision    internal/license/license.go        核心演算法閘門                     擴散,不回傳裸 bool
+license.(*State).Observe          internal/license/license.go        延遲靜默反應(倒數後 exit 0)       第4層延遲觸發
+license.parseToken                internal/license/license.go        token 簽章/到期驗證                garble;正式版換後端非對稱簽章
+license.VerifyOnline              internal/license/online.go         線上授權(nonce/pinning/離線容忍)  第5層後端化入口
+license.verifyServerSig           internal/license/online.go         伺服器回應簽章驗證                 第5層
+vmp.CriticalCombine               internal/vmp/vmp_sdk.go            最敏感單一決策(折算三片段)       ★第6層 VMProtect 虛擬化目標
+core.ComputeSignal                internal/core/core.go              ★值錢的核心演算法                  ★第6層虛擬化 + 第5層後端化(首選)
+guard.Check / antiDebug           internal/guard/*.go                反調試 + 完整性自檢                第4層(cgo 原生,garble 不動 C)
+guard.integrity / hashTextSection internal/guard/integrity.go        .text 完整性比對                   基準 hash 加殼後回填(第4層)
+device.Fingerprint                internal/device/fingerprint.go     裝置指紋(HMAC,不外洩原始識別)   第5層綁定
+
+# 保護優先序(規格書 §11 務實結論):
+#   1) core.ComputeSignal —— 最值錢。能聯網就「搬後端」(第5層),CP 值最高。
+#   2) vmp.CriticalCombine —— 單點最敏感決策,已隔離成原生函式供 VMProtect 虛擬化。
+#   3) license.* —— 已做「擴散 + 延遲 + 靜默」,避免單點被 patch 成永遠 true。

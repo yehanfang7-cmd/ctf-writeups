@@ -355,12 +355,13 @@ def check_hash(path, expected):
         raise ValueError(f"SHA256 mismatch for {path}; run python VMP/fetch_samples.py multipath")
 
 
-def run_sample(name, out_dir, diagnose=False):
+def run_sample(name, out_dir, diagnose=False, input_dir=None):
     from triton import ARCH, MODE, TritonContext
 
     spec = SAMPLES[name]
-    check_hash(HERE / f"inputs/{name}.c", spec["source"])
-    traces = [HERE / f"inputs/{name}.vmp.trace.{i}" for i in (1, 2)]
+    input_dir = Path(input_dir) if input_dir is not None else HERE / "inputs"
+    check_hash(input_dir / f"{name}.c", spec["source"])
+    traces = [input_dir / f"{name}.vmp.trace.{i}" for i in (1, 2)]
     for trace, expected in zip(traces, spec["traces"]):
         check_hash(trace, expected)
     ctx = TritonContext(ARCH.X86_64)
@@ -405,6 +406,8 @@ def main():
                         help=f"default: verified samples ({', '.join(verified)}); also: "
                              + ", ".join(n for n in SAMPLES if n not in verified))
     parser.add_argument("--out", type=Path, default=HERE / "generated")
+    parser.add_argument("--inputs", type=Path, default=HERE / "inputs",
+                        help="Directory containing pinned C sources and traces")
     parser.add_argument("--diagnose", action="store_true",
                         help="Replay without failing on divergences and report them; no merge or proof")
     args = parser.parse_args()
@@ -415,7 +418,7 @@ def main():
     try:
         for name in args.samples or verified:
             try:
-                print(run_sample(name, args.out, args.diagnose), end="", flush=True)
+                print(run_sample(name, args.out, args.diagnose, args.inputs), end="", flush=True)
             except ValueError as error:
                 failures += 1
                 note = " (known open problem, see writeup)" if SAMPLES[name]["status"] == "open" else ""

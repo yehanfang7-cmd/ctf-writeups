@@ -1,0 +1,2 @@
+triton-library==1.0.0rc4
+llvmlite==0.46.0

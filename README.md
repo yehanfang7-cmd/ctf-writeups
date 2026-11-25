@@ -65,8 +65,9 @@
 | VMProtect 3.x 直接模擬（sample1–6） | 不用 Pin 在 Windows 模擬 ELF、學習環境、concolic 自動探索路徑 | 6 個樣本與 C 原始碼 SMT 等價；145,070 條指令與真實 CPU trace 一致 | [題解](VMP/04_emulate/writeup.md) |
 | Flare-On 5 #12 suspicious_floppy | x86 → Subleq → RSSB 三層逐層建模、lockstep 比對、公式提升、窮舉 G 求解 | 每層與下層逐步一致；求出全部解（flag 及後接 1–2 個任意字元），真實 x86 確認 | [題解](VMP/05_floppy/writeup.md) |
 | Tigress challenge 0000（5 個程式） | 不依賴 dispatcher 類型的黑箱 opcode 分類、bytecode 反組譯、提升為 C、z3 路徑列舉 | 5 個程式全部還原成可讀 C；201,169 步 lockstep 一致，每個程式 2,000 組以上輸入與原始 `SECRET` 一致 | [題解](VMP/06_tigress/writeup.md) |
+| minivm（自製 VM 保護器） | 找出原始版的明文洩漏、建置期與出貨分離、直譯器加固；再只拿 binary 掃描金鑰並提升為 C | 出貨版找不到任何秘密常數；攻擊 4.6 秒還原出 C，編譯後與 binary 一致；9 個測試皆附失敗對照組 | [題解](VMP/07_minivm/writeup.md) |
 
-**[VMP 專區：執行方式、資料來源與限制](VMP/README.md)**。單元 01–04 還原的是單一函式的表達式，單元 05 是完整的 CTF 題目，單元 06 把 5 個 VM 保護的函式還原成 C 原始碼；都還沒有重建出可執行的去保護 binary。
+**[VMP 專區：執行方式、資料來源與限制](VMP/README.md)**。單元 01–04 還原的是單一函式的表達式，單元 05 是完整的 CTF 題目，單元 06 把 5 個 VM 保護的函式還原成 C 原始碼，單元 07 自己做保護器再拆掉它；都還沒有重建出可執行的去保護 binary。
 
 ---
 
@@ -136,7 +137,8 @@ ctf-writeups/
 │   ├── 03_multipath/                # 虛擬分支偵測與雙軌跡合併
 │   ├── 04_emulate/                  # 不用 Pin 直接模擬與自動路徑探索
 │   ├── 05_floppy/                   # Flare-On 5 #12 三層 VM 去虛擬化
-│   └── 06_tigress/                  # Tigress VM 挑戰 0000 還原成 C
+│   ├── 06_tigress/                  # Tigress VM 挑戰 0000 還原成 C
+│   └── 07_minivm/                   # 自製 VM 保護器：修正洩漏後從 binary 還原
 ├── docs/                            # 深度分析文件
 └── .gitignore
 ```

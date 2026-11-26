@@ -68,8 +68,9 @@
 | Flare-On 5 #12 suspicious_floppy | x86 → Subleq → RSSB 三層逐層建模、lockstep 比對、公式提升、窮舉 G 求解 | 每層與下層逐步一致；求出全部解（flag 及後接 1–2 個任意字元），真實 x86 確認 | [題解](VMP/05_floppy/writeup.md) |
 | Tigress challenge 0000（5 個程式） | 不依賴 dispatcher 類型的黑箱 opcode 分類、bytecode 反組譯、提升為 C、z3 路徑列舉 | 5 個程式全部還原成可讀 C；201,169 步 lockstep 一致，每個程式 2,000 組以上輸入與原始 `SECRET` 一致 | [題解](VMP/06_tigress/writeup.md) |
 | minivm（自製 VM 保護器） | 找出原始版的明文洩漏、建置期與出貨分離、直譯器加固；只拿 binary 掃描金鑰並提升為 C；再加上 opcode 隨機重排並用單元 06 的黑箱分類法破解 | 出貨版找不到任何秘密常數；攻擊 4.6 秒還原出 C；重排後固定掃描失效，行為分類還原全部 13 個 opcode 並還原出同一份 C；15 個測試 | [題解](VMP/07_minivm/writeup.md) |
+| Tigress challenge 0004–0006（15 個程式） | 雙層 VM、VM＋JIT、雙層 JIT；整支 ELF 模擬、取出 JIT 生成碼、x86 提升為 C、不分析外層 VM 直接探測內層 VM | 15 個程式全部還原成可讀 C；VM 模型與真實執行逐步比對 370,943 步；有一個分支 z3 未能判定（如實列出） | [題解](VMP/08_tigress_hard/writeup.md) |
 
-**[VMP 專區：執行方式、資料來源與限制](VMP/README.md)**。單元 01–04 還原的是單一函式的表達式，單元 05 是完整的 CTF 題目，單元 06 把 5 個 VM 保護的函式還原成 C 原始碼，單元 07 自己做保護器再拆掉它；都還沒有重建出可執行的去保護 binary。
+**[VMP 專區：執行方式、資料來源與限制](VMP/README.md)**。單元 01–04 還原的是單一函式的表達式，單元 05 是完整的 CTF 題目，單元 06 把 5 個 VM 保護的函式還原成 C 原始碼，單元 07 自己做保護器再拆掉它，單元 08 把 Tigress 最難的三組（雙層 VM 與 JIT）共 15 個函式還原成 C；都還沒有重建出可執行的去保護 binary。
 
 ### Go 執行檔防逆向 / 防 AI 反編譯（防守方實作）
 
@@ -156,7 +157,8 @@ ctf-writeups/
 │   ├── 04_emulate/                  # 不用 Pin 直接模擬與自動路徑探索
 │   ├── 05_floppy/                   # Flare-On 5 #12 三層 VM 去虛擬化
 │   ├── 06_tigress/                  # Tigress VM 挑戰 0000 還原成 C
-│   └── 07_minivm/                   # 自製 VM 保護器：修正洩漏後從 binary 還原
+│   ├── 07_minivm/                   # 自製 VM 保護器：修正洩漏後從 binary 還原
+│   └── 08_tigress_hard/             # Tigress 挑戰 0004–0006：雙層 VM、VM+JIT、雙層 JIT
 ├── go/                              # Go 執行檔多層防逆向實作（防守方）
 │   ├── cmd/ internal/ tools/        # sentinel app + securegen/mocklicense
 │   ├── scripts/                     # build / 完整性回填 / 驗收回歸 / VT 掃描

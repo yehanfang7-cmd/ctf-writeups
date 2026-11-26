@@ -1,5 +1,7 @@
 # CTF 逆向工程題解教程
 
+> **English Overview:** Open-source security research repository maintained by `@yehanfang7-cmd` (dedicated security research account of [@rongkao](https://github.com/rongkao)), focusing on **defensive Go binary hardening (`go/`)**, **VM/packer deobfuscation via Triton/Unicorn/Z3 (`VMP/`)**, and **isolated binary reverse-engineering writeups (`FlareOn/`, `KCTF2026/`)**.
+
 > 逆向工程 CTF 題解合集 — 包含 KCTF2026 看雪靶場全 8 題 + Flare-On 4/5 全 24 題 + VM/VMProtect 還原實驗 + Go 執行檔多層防逆向實作，附完整解題腳本與詳細分析
 
 ## 目錄
@@ -113,7 +115,7 @@
 
 ```bash
 # 複製倉庫
-git clone https://github.com/rongkao/ctf-writeups.git
+git clone https://github.com/yehanfang7-cmd/ctf-writeups.git
 cd ctf-writeups
 
 # 安裝 Python 相依套件

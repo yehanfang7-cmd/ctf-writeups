@@ -160,7 +160,6 @@ ctf-writeups/
 │   ├── scripts/                     # build / 完整性回填 / 驗收回歸 / VT 掃描
 │   ├── docs/                        # hardening-report / vmprotect-manual / backend
 │   └── README.md
-├── docs/                            # 深度分析文件
 └── .gitignore
 ```
 

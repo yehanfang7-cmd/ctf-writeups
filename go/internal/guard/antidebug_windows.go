@@ -53,8 +53,10 @@ static int c_timing_suspect(void) {
     QueryPerformanceCounter(&b);
     double ms = (double)(b.QuadPart - a.QuadPart) * 1000.0 / (double)freq.QuadPart;
     (void)acc;
-    // ~0.1ms uninstrumented; 50ms means something is watching each instruction.
-    return ms > 50.0 ? 1 : 0;
+    // ~0.1ms uninstrumented. Single-stepping inflates this to seconds, so a high
+    // threshold still catches a debugger while staying robust on loaded/shared
+    // machines (e.g. CI runners) that may preempt the loop for tens of ms.
+    return ms > 200.0 ? 1 : 0;
 }
 */
 import "C"
